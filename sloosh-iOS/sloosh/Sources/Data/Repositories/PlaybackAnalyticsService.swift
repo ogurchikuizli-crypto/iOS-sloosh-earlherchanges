@@ -651,4 +651,32 @@ public final class PlaybackAnalyticsService: ObservableObject {
         items.sort { $0.count > $1.count }
         return items
     }
+    /// Fetches top media for the last month (30 days) from Sloosh statistics
+    public func fetchMonthlyTopMedia(limit: Int = 40) async -> [MediaDto] {
+        let stats = await fetchTopMediaAnalytics()
+        guard !stats.isEmpty else { return [] }
+
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        let thirtyDaysAgoMs = nowMs - Int64(30 * 86_400 * 1000)
+
+        // Filter for media active within the last 30 days
+        let recent = stats.filter { ($0.lastPlayedMs ?? 0) >= thirtyDaysAgoMs }
+        let candidates = recent.count >= 4 ? recent : stats
+
+        let topSorted = candidates.sorted { $0.totalPlays > $1.totalPlays }.prefix(limit)
+
+        return topSorted.map { item in
+            let cleanId: String
+            if item.mediaKey.hasPrefix("kp_") {
+                cleanId = String(item.mediaKey.dropFirst(3))
+            } else {
+                cleanId = item.mediaKey
+            }
+            return MediaDto(
+                originalId: .string(cleanId),
+                title: item.title,
+                posterUrl: item.posterUrl
+            )
+        }
+    }
 }

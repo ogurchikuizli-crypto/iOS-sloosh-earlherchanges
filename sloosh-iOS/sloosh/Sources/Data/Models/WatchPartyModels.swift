@@ -238,3 +238,141 @@ public struct WatchPartyInvitePayload: Identifiable, Codable, Sendable, Equatabl
         self.status = status
     }
 }
+
+// MARK: - Watch Party Chat Message
+
+/// A text message sent inside an active watch party (`watch_parties/{partyId}/chat/{messageId}`).
+public struct WatchPartyChatMessage: Identifiable, Codable, Sendable, Equatable, Hashable {
+    public var id: String
+    public var uid: String
+    public var name: String
+    public var text: String
+    public var createdAtMs: Int64
+
+    public init(id: String, uid: String, name: String, text: String, createdAtMs: Int64) {
+        self.id = id
+        self.uid = uid
+        self.name = name
+        self.text = text
+        self.createdAtMs = createdAtMs
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case uid
+        case name
+        case text
+        case createdAtMs
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decodeIfPresent(String.self, forKey: .id) ?? ""
+        self.uid = try container.decodeIfPresent(String.self, forKey: .uid) ?? ""
+        self.name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        self.text = try container.decodeIfPresent(String.self, forKey: .text) ?? ""
+        self.createdAtMs = try container.decodeIfPresent(Int64.self, forKey: .createdAtMs) ?? 0
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(uid, forKey: .uid)
+        try container.encode(name, forKey: .name)
+        try container.encode(text, forKey: .text)
+        try container.encode(createdAtMs, forKey: .createdAtMs)
+    }
+}
+
+// MARK: - Watch Party Timecodes
+
+/// A piece of chat text: either plain text or a detected timecode (e.g. `12:34`, `1:02:03`).
+public enum WatchPartyTimecodeSegment: Sendable, Equatable, Hashable {
+    case text(String)
+    case timecode(String, Double)
+}
+
+public enum WatchPartyTimecode {
+    /// Formats seconds as `m:ss` or `h:mm:ss`.
+    public static func format(_ totalSeconds: Double) -> String {
+        let safe = totalSeconds.isFinite ? max(0, totalSeconds) : 0
+        let sec = Int(safe)
+        let h = sec / 3600
+        let m = (sec % 3600) / 60
+        let s = sec % 60
+        if h > 0 {
+            return String(format: "%d:%02d:%02d", h, m, s)
+        }
+        return String(format: "%d:%02d", m, s)
+    }
+
+    /// Parses `m:ss` / `mm:ss` / `h:mm:ss` into seconds. Returns nil if the token is not a valid timecode.
+    public static func seconds(from token: String) -> Double? {
+        let parts = token.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
+        guard parts.count == 2 || parts.count == 3 else { return nil }
+        for part in parts {
+            guard !part.isEmpty, part.allSatisfy({ $0.isASCII && $0.isNumber }) else { return nil }
+        }
+        for part in parts.dropFirst() {
+            guard part.count == 2 else { return nil }
+        }
+        let values = parts.compactMap { Int($0) }
+        guard values.count == parts.count else { return nil }
+
+        if values.count == 2 {
+            guard parts[0].count <= 3, values[1] < 60 else { return nil }
+            return Double(values[0] * 60 + values[1])
+        }
+        guard parts[0].count <= 2, values[1] < 60, values[2] < 60 else { return nil }
+        return Double(values[0] * 3600 + values[1] * 60 + values[2])
+    }
+
+    /// Splits text into plain and timecode segments.
+    public static func segments(in text: String) -> [WatchPartyTimecodeSegment] {
+        var result: [WatchPartyTimecodeSegment] = []
+        var buffer = ""
+        var run = ""
+
+        func flushRun() {
+            guard !run.isEmpty else { return }
+            var core = Substring(run)
+            var leading = ""
+            var trailing = ""
+            while core.first == ":" {
+                leading.append(":")
+                core = core.dropFirst()
+            }
+            while core.last == ":" {
+                trailing.append(":")
+                core = core.dropLast()
+            }
+            buffer += leading
+            let token = String(core)
+            if let secs = seconds(from: token) {
+                if !buffer.isEmpty {
+                    result.append(.text(buffer))
+                    buffer = ""
+                }
+                result.append(.timecode(token, secs))
+            } else {
+                buffer += token
+            }
+            buffer += trailing
+            run = ""
+        }
+
+        for character in text {
+            if character.isASCII && (character.isNumber || character == ":") {
+                run.append(character)
+            } else {
+                flushRun()
+                buffer.append(character)
+            }
+        }
+        flushRun()
+        if !buffer.isEmpty {
+            result.append(.text(buffer))
+        }
+        return result
+    }
+}

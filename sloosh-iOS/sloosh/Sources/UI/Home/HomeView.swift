@@ -28,6 +28,7 @@ enum HomeCategory: String, CaseIterable {
 
 enum HomeFilter: String, CaseIterable, Identifiable {
     case popular = "Смотрят сейчас"
+    case monthPopular = "Топ месяца"
     case topRated = "По рейтингу"
 
     var id: String { rawValue }
@@ -37,6 +38,7 @@ enum HomeFilter: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .popular: return "flame"
+        case .monthPopular: return "chart.line.uptrend.xyaxis"
         case .topRated: return "star"
         }
     }
@@ -432,6 +434,23 @@ private struct HomeCategoryTextTabs: View {
                                 showFilters = true
                             }
                         )
+                        .contextMenu {
+                            ForEach(HomeFilter.allCases) { filter in
+                                Button {
+                                    withAnimation(tabScrollAnimation) {
+                                        isFilterCollapsed = false
+                                        selectedCategory = category
+                                        selectedFilter = filter
+                                    }
+                                } label: {
+                                    if selectedCategory == category && selectedFilter == filter {
+                                        Label(filter.title, systemImage: "checkmark")
+                                    } else {
+                                        Label(filter.title, systemImage: filter.icon)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -531,28 +550,54 @@ struct MoviePosterCard: View {
     private var classicBody: some View {
         VStack(alignment: .leading, spacing: 8) {
             let url = URL(string: movie.displayPosterUrl ?? "")
+            let isDoomsday = movie.isDoomsdayPrerequisite
             
             ZStack(alignment: .topLeading) {
                 RemotePosterView(url: url)
+                    .overlay(
+                        Group {
+                            if isDoomsday {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .strokeBorder(Color(red: 0.18, green: 0.80, blue: 0.44), lineWidth: 2)
+                            }
+                        }
+                    )
+                    .shadow(color: isDoomsday ? Color(red: 0.18, green: 0.80, blue: 0.44).opacity(0.4) : .clear, radius: 6)
                 
-                if movie.isUnreleased {
-                    Text("Скоро")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                        .padding(8)
-                } else if movie.effectiveRating > 0 {
-                    Text(String(format: "%.1f", movie.effectiveRating))
-                        .font(.system(size: 13, weight: .heavy))
+                HStack(alignment: .top) {
+                    if movie.isUnreleased {
+                        Text("Скоро")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    } else if movie.effectiveRating > 0 {
+                        Text(String(format: "%.1f", movie.effectiveRating))
+                            .font(.system(size: 13, weight: .heavy))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 3)
+                            .background(Color.rating(movie.effectiveRating))
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }
+
+                    if isDoomsday {
+                        Spacer()
+                        HStack(spacing: 3) {
+                            Image(systemName: "shield.fill")
+                                .font(.system(size: 8, weight: .bold))
+                            Text("Doomsday")
+                                .font(.system(size: 9, weight: .bold))
+                        }
                         .foregroundColor(.white)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 3)
-                        .background(Color.rating(movie.effectiveRating))
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .padding(8)
+                        .background(Color(red: 0.12, green: 0.65, blue: 0.35))
+                        .clipShape(Capsule())
+                    }
                 }
+                .padding(8)
             }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -595,7 +640,8 @@ struct MoviePosterCard: View {
     }
 
     private var overlayBody: some View {
-        RemotePosterView(url: URL(string: movie.displayPosterUrl ?? ""), cornerRadius: 12) {
+        let isDoomsday = movie.isDoomsdayPrerequisite
+        return RemotePosterView(url: URL(string: movie.displayPosterUrl ?? ""), cornerRadius: 12) {
             ZStack(alignment: .bottomLeading) {
                 // Progressive blur with dark tint at the bottom of the poster
                 VariableBlurView(
@@ -650,25 +696,50 @@ struct MoviePosterCard: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
         }
         .overlay(alignment: .topLeading) {
-            if movie.isUnreleased {
-                Text("Скоро")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    .padding(8)
-            } else if movie.effectiveRating > 0 {
-                Text(String(format: "%.1f", movie.effectiveRating))
-                    .font(.system(size: 12, weight: .heavy))
+            HStack(alignment: .top) {
+                if movie.isUnreleased {
+                    Text("Скоро")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                } else if movie.effectiveRating > 0 {
+                    Text(String(format: "%.1f", movie.effectiveRating))
+                        .font(.system(size: 12, weight: .heavy))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 3)
+                        .background(Color.rating(movie.effectiveRating))
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+
+                if isDoomsday {
+                    Spacer()
+                    HStack(spacing: 3) {
+                        Image(systemName: "shield.fill")
+                            .font(.system(size: 8, weight: .bold))
+                        Text("Doomsday")
+                            .font(.system(size: 9, weight: .bold))
+                    }
                     .foregroundColor(.white)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 3)
-                    .background(Color.rating(movie.effectiveRating))
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    .padding(8)
+                    .background(Color(red: 0.12, green: 0.65, blue: 0.35))
+                    .clipShape(Capsule())
+                }
             }
+            .padding(8)
         }
+        .overlay(
+            Group {
+                if isDoomsday {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(Color(red: 0.18, green: 0.80, blue: 0.44), lineWidth: 2)
+                }
+            }
+        )
+        .shadow(color: isDoomsday ? Color(red: 0.18, green: 0.80, blue: 0.44).opacity(0.4) : .clear, radius: 6)
         .aspectRatio(2/3, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
@@ -761,6 +832,11 @@ class HomeViewModel: ObservableObject {
     private var hasPerformedInitialLoad = false
 
     func applyCurrentSelection(force: Bool = false) async {
+        if searchFilters.order == "MONTH_POPULAR" && selectedFilter != .monthPopular {
+            selectedFilter = .monthPopular
+        } else if searchFilters.order == "RATING" && selectedFilter != .topRated {
+            selectedFilter = .topRated
+        }
         let key = HomeCacheKey(category: selectedCategory, filter: selectedFilter, searchFilters: searchFilters)
 
         if force {
@@ -897,7 +973,11 @@ class HomeViewModel: ObservableObject {
         let repo = MoviesRepository.shared
         switch category {
         case .all:
-            if selectedFilter == .topRated {
+            if selectedFilter == .monthPopular {
+                let monthly = await PlaybackAnalyticsService.shared.fetchMonthlyTopMedia(limit: 40)
+                if !monthly.isEmpty { return monthly }
+                return try? await repo.getPopularMovies(page: 1, force: false)
+            } else if selectedFilter == .topRated {
                 if let top = try? await repo.getTopMovies(page: 1, force: false), !top.isEmpty {
                     return top.filter { !isTalkShowOrReality($0) }
                 }
@@ -982,6 +1062,12 @@ class HomeViewModel: ObservableObject {
             switch category {
             case .all:
                 switch filter {
+                case .monthPopular:
+                    if cursor.page == 1 {
+                        let monthly = await PlaybackAnalyticsService.shared.fetchMonthlyTopMedia(limit: 40)
+                        if !monthly.isEmpty { return monthly }
+                    }
+                    return try await MoviesRepository.shared.getPopularMovies(page: cursor.page, force: force)
                 case .popular:
                     async let trendingTask = MoviesRepository.shared.getTrending(page: cursor.page, force: force)
                     async let popularMoviesTask = MoviesRepository.shared.getPopularMovies(page: cursor.page, force: force)
@@ -1043,6 +1129,13 @@ class HomeViewModel: ObservableObject {
                 }
             case .movies:
                 switch filter {
+                case .monthPopular:
+                    if cursor.page == 1 {
+                        let monthly = await PlaybackAnalyticsService.shared.fetchMonthlyTopMedia(limit: 40)
+                        let moviesOnly = monthly.filter { $0.isMovieType }
+                        if !moviesOnly.isEmpty { return moviesOnly }
+                    }
+                    return try await MoviesRepository.shared.getPopularMovies(page: cursor.page, force: force)
                 case .popular:
                     return try await MoviesRepository.shared.getPopularMovies(page: cursor.page, force: force)
                 case .topRated:

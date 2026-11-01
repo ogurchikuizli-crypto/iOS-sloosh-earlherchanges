@@ -154,6 +154,32 @@ final class DownloadManager: NSObject, ObservableObject, URLSessionDownloadDeleg
     static let shared = DownloadManager()
     
     @Published private(set) var downloads: [DownloadItem] = []
+    @Published private(set) var downloadSpeeds: [String: Double] = [:]
+    private var speedByteAccumulators: [String: (bytes: Int64, startTime: Date)] = [:]
+
+    func recordDownloadedBytes(_ bytes: Int64, for itemId: String) {
+        let now = Date()
+        var current = speedByteAccumulators[itemId] ?? (0, now)
+        current.bytes += bytes
+        let elapsed = now.timeIntervalSince(current.startTime)
+        if elapsed >= 0.5 {
+            let instantaneous = Double(current.bytes) / elapsed
+            let prev = downloadSpeeds[itemId] ?? instantaneous
+            downloadSpeeds[itemId] = prev * 0.4 + instantaneous * 0.6
+            speedByteAccumulators[itemId] = (0, now)
+        } else {
+            speedByteAccumulators[itemId] = current
+        }
+    }
+
+    func speedString(for itemId: String) -> String? {
+        guard let speed = downloadSpeeds[itemId], speed > 500 else { return nil }
+        if speed >= 1_048_576 {
+            return String(format: "%.1f МБ/с", speed / 1_048_576)
+        } else {
+            return String(format: "%.0f КБ/с", speed / 1024)
+        }
+    }
     
     private let saveKey = "sloosh_downloads"
     private let dataStore = JSONDataStore<[DownloadItem]>(fileName: "downloads")
@@ -707,6 +733,13 @@ final class DownloadManager: NSObject, ObservableObject, URLSessionDownloadDeleg
     }
     
     // MARK: - URLSessionDownloadDelegate
+
+    nonisolated func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        guard let desc = downloadTask.taskDescription, let comps = extractTaskInfo(desc: desc) else { return }
+        Task { @MainActor in
+            self.recordDownloadedBytes(bytesWritten, for: comps.itemId)
+        }
+    }
     
     nonisolated func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         guard let desc = downloadTask.taskDescription, let comps = extractTaskInfo(desc: desc) else { return }

@@ -17,6 +17,7 @@ public final class WatchPartyRepository: ObservableObject {
     @Published public private(set) var lastStatusToast: String? = nil
     @Published public var incomingInvite: WatchPartyInvitePayload? = nil
     @Published var activePartyPlayerConfig: PlayerConfig? = nil
+    @Published public private(set) var chatMessages: [WatchPartyChatMessage] = []
 
     // Callback hooks for PlayerViewModel
     public var onRemotePlay: (() -> Void)?
@@ -368,6 +369,7 @@ public final class WatchPartyRepository: ObservableObject {
         pollingTask = nil
         smoothedDrift = 0.0
         currentAppliedRate = 1.0
+        chatMessages = []
 
         Task {
             let patchDict: [String: Any] = [
@@ -689,6 +691,35 @@ public final class WatchPartyRepository: ObservableObject {
         }
     }
 
+    // MARK: - Watch Party Chat
+
+    public func sendChatMessage(text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        guard let session = activeSession, isConnected else { return }
+        guard let chatId = session.chatId else { return }
+
+        let myUid = currentUserId
+        let myName = currentUserName
+        let nowMs = calibratedNowMs
+        let msgId = UUID().uuidString
+        let message = WatchPartyChatMessage(id: msgId, uid: myUid, name: myName, text: trimmed, createdAtMs: nowMs)
+
+        // Optimistic local update
+        self.chatMessages.append(message)
+
+        Task {
+            guard let url = URL(string: "\(databaseBaseURL)/chats/\(chatId)/watch_party_chat/\(msgId).json\(authQueryParam)"),
+                  let data = try? JSONEncoder().encode(message) else { return }
+
+            var req = URLRequest(url: url)
+            req.httpMethod = "PUT"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = data
+            _ = try? await URLSession.shared.data(for: req)
+        }
+    }
+
     // MARK: - Polling & Real-time Observation
 
     private func startObservingSession(chatId: String, partyId: String) {
@@ -809,6 +840,17 @@ public final class WatchPartyRepository: ObservableObject {
                     fetchedData = data
                 }
             } catch {}
+        }
+
+        // Poll chat messages for current party
+        if let chatUrl = URL(string: "\(databaseBaseURL)/chats/\(chatId)/watch_party_chat.json\(authQueryParam)") {
+            if let (msgData, _) = try? await URLSession.shared.data(from: chatUrl),
+               let dict = try? JSONDecoder().decode([String: WatchPartyChatMessage].self, from: msgData) {
+                let sorted = dict.values.sorted { $0.createdAtMs < $1.createdAtMs }
+                await MainActor.run {
+                    self.chatMessages = sorted
+                }
+            }
         }
 
         guard let data = fetchedData, let remote = try? JSONDecoder().decode(WatchPartySession.self, from: data) else { return }

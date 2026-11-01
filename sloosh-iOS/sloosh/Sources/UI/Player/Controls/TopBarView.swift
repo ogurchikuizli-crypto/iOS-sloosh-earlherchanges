@@ -11,6 +11,7 @@ struct TopBarView: View {
     let onDismiss: () -> Void
     @Binding var isInteracting: Bool
     var onInteraction: (() -> Void)? = nil
+    var onToggleChat: (() -> Void)? = nil
 
     @StateObject private var watchPartyRepo = WatchPartyRepository.shared
     @State private var showFriendPicker = false
@@ -31,6 +32,9 @@ struct TopBarView: View {
                     closeButton
                     dualActionsGroup
                     Spacer()
+                    if watchPartyRepo.isConnected {
+                        chatButton
+                    }
                     watchPartyButton
                         .animation(.spring(response: 0.35, dampingFraction: 0.82), value: watchPartyRepo.isConnected)
                     clipButton
@@ -214,6 +218,22 @@ struct TopBarView: View {
     // MARK: - Совместный просмотр (SharePlay-style)
 
     @ViewBuilder
+    private var chatButton: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            onToggleChat?()
+        } label: {
+            Image(systemName: "bubble.left.and.bubble.right.fill")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white)
+                .glassForeground()
+                .frame(width: 44, height: 44)
+        }
+        .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: Circle())
+        .accessibilityLabel("Чат совместного просмотра")
+    }
+
     private var watchPartyButton: some View {
         if watchPartyRepo.isConnected, let peer = watchPartyRepo.peerUser {
             Menu {

@@ -6,6 +6,7 @@ public struct AdminDashboardView: View {
     @StateObject private var repo = AdminRepository.shared
     @StateObject private var commentsRepo = MediaCommentsRepository.shared
     @StateObject private var authRepo = AuthRepository.shared
+    @StateObject private var logoReportsRepo = LogoReportsRepository.shared
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
 
@@ -157,6 +158,7 @@ public struct AdminDashboardView: View {
                         Task {
                             await repo.fetchOverviewStats()
                             await commentsRepo.fetchReports()
+            await logoReportsRepo.fetchReports()
                         }
                     }
 
@@ -902,11 +904,155 @@ public struct AdminDashboardView: View {
         commentsRepo.reports.reduce(0) { $0 + $1.reportsCount }
     }
 
+    private var logoReportsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Image(systemName: "photo.badge.plus")
+                    .foregroundColor(.green)
+                Text("Предложения логотипов")
+                    .font(.system(size: 15, weight: .bold))
+                Spacer()
+                Text("\(logoReportsRepo.pendingReports.count)")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(Color.white.opacity(0.1))
+                    .clipShape(Capsule())
+            }
+
+            if logoReportsRepo.pendingReports.isEmpty {
+                HStack {
+                    Spacer()
+                    Text("Нет новых предложений")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                        .padding(.vertical, 8)
+                    Spacer()
+                }
+            } else {
+                ForEach(logoReportsRepo.pendingReports) { report in
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text(report.mediaTitle)
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Text(report.suggestedByName)
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                        }
+
+                        if let comment = report.comment, !comment.isEmpty {
+                            Text(comment)
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                        }
+
+                        // Logo comparison
+                        HStack(spacing: 12) {
+                            // Current
+                            VStack(spacing: 4) {
+                                Text("Текущий")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(.secondary)
+                                if let cUrl = report.currentLogoUrl, let u = URL(string: cUrl) {
+                                    AsyncCachedImage(url: u) {
+                                        ProgressView().controlSize(.small)
+                                    } content: { img in
+                                        Image(uiImage: img).resizable().scaledToFit()
+                                    } fallback: {
+                                        Text("Нет").font(.system(size: 12)).foregroundColor(.secondary)
+                                    }
+                                    .frame(height: 40)
+                                } else {
+                                    Text("Нет").font(.system(size: 12)).foregroundColor(.secondary).frame(height: 40)
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(8)
+                            .background(Color.white.opacity(0.05))
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 14))
+                                .foregroundColor(.secondary)
+
+                            // Suggested
+                            VStack(spacing: 4) {
+                                Text("Предложенный")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(.green)
+                                if let u = URL(string: report.suggestedLogoUrl) {
+                                    AsyncCachedImage(url: u) {
+                                        ProgressView().controlSize(.small)
+                                    } content: { img in
+                                        Image(uiImage: img).resizable().scaledToFit()
+                                    } fallback: {
+                                        Text("Ошибка").font(.system(size: 12)).foregroundColor(.red)
+                                    }
+                                    .frame(height: 40)
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(8)
+                            .background(Color.green.opacity(0.1))
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+
+                        // Action buttons
+                        HStack(spacing: 10) {
+                            Button {
+                                Task {
+                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                    _ = await logoReportsRepo.approveReport(report)
+                                }
+                            } label: {
+                                Label("Применить", systemImage: "checkmark")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 8)
+                                    .background(Color.green.opacity(0.35))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                            .buttonStyle(.plain)
+
+                            Button {
+                                Task {
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                    _ = await logoReportsRepo.rejectReport(report)
+                                }
+                            } label: {
+                                Label("Отклонить", systemImage: "xmark")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(.secondary)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 8)
+                                    .background(Color.white.opacity(0.08))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(12)
+                    .background(Color.white.opacity(0.06))
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                }
+            }
+        }
+        .padding(14)
+        .glassEffect(in: RoundedRectangle(cornerRadius: 18))
+    }
+
     private var reportsTab: some View {
         ScrollView {
             VStack(spacing: 12) {
+                // Logo Suggestions Section
+                logoReportsSection
+
                 HStack(spacing: 6) {
-                    Text("\(commentsRepo.reports.count) с жалобами")
+                    Text("\(commentsRepo.reports.count) с жалобами на комментарии")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.primary)
 

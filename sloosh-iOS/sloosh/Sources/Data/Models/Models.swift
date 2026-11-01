@@ -249,6 +249,11 @@ struct MediaDto: Codable, Identifiable {
         return nil
     }
 
+    /// Whether this movie is a prerequisite before Avengers: DOOMSDAY (Судный День)
+    var isDoomsdayPrerequisite: Bool {
+        DoomsdayPrerequisites.matches(self)
+    }
+
     var effectiveRating: Double {
         if let r = rating, r > 0 { return r }
         if let kp = ratings?.kp, kp > 0 { return kp }
@@ -1042,6 +1047,45 @@ struct EpisodeRatingsDto: Codable {
     let imdb: Double?
 }
 
+// MARK: - Doomsday Prerequisites
+
+public enum DoomsdayPrerequisites {
+    public static let tmdbIds: Set<Int> = [
+        24428,   // The Avengers
+        99861,   // Avengers: Age of Ultron
+        299536,  // Avengers: Infinity War
+        299534,  // Avengers: Endgame
+        271110,  // Captain America: Civil War
+        520758,  // The Fantastic Four: First Steps
+        774752,  // Thunderbolts*
+        823464,  // Captain America: Brave New World
+        533535,  // Deadpool & Wolverine
+        634649,  // Spider-Man: No Way Home
+        453395,  // Doctor Strange in the Multiverse of Madness
+        640146,  // Ant-Man and the Wasp: Quantumania
+        84958,   // Loki
+        1003596  // Avengers: Doomsday
+    ]
+
+    public static func matches(_ media: MediaDto) -> Bool {
+        if let tmdb = media.externalIds?.tmdb, tmdbIds.contains(tmdb) { return true }
+        if let kp = media.externalIds?.kp, [263531, 679830, 843649, 843650].contains(kp) { return true }
+        if let idInt = Int(media.id), tmdbIds.contains(idInt) { return true }
+        let titleLower = (media.title ?? media.name ?? media.originalTitle ?? "").lowercased()
+        if titleLower.contains("мстители") || titleLower.contains("avengers") ||
+           titleLower.contains("громовержцы") || titleLower.contains("thunderbolts") ||
+           titleLower.contains("фантастическая четвёрка") || titleLower.contains("fantastic four") ||
+           titleLower.contains("судный день") || titleLower.contains("doomsday") ||
+           (titleLower.contains("дэдпул") && titleLower.contains("росомаха")) ||
+           (titleLower.contains("deadpool") && titleLower.contains("wolverine")) ||
+           titleLower.contains("квантомания") || titleLower.contains("quantumania") ||
+           titleLower == "локи" || titleLower == "loki" {
+            return true
+        }
+        return false
+    }
+}
+
 // MARK: - Studios, Networks & Collections
 
 struct ProductionCompanyDto: Codable, Identifiable, Hashable {
@@ -1049,12 +1093,49 @@ struct ProductionCompanyDto: Codable, Identifiable, Hashable {
     let name: String
     let logo: String?
     let logos: [String: String]?
-    
-    init(id: Int, name: String, logo: String? = nil, logos: [String: String]? = nil) {
+    /// Optional raw logo path (`/abc.png`) if the backend forwards it.
+    let logoPath: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, logo, logos
+        case logoPath = "logo_path"
+        case logoPathCamel = "logoPath"
+    }
+
+    init(id: Int, name: String, logo: String? = nil, logos: [String: String]? = nil, logoPath: String? = nil) {
         self.id = id
         self.name = name
         self.logo = logo
         self.logos = logos
+        self.logoPath = logoPath
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(Int.self, forKey: .id)
+        self.name = try container.decode(String.self, forKey: .name)
+        self.logo = try container.decodeIfPresent(String.self, forKey: .logo)
+        self.logos = try container.decodeIfPresent([String: String].self, forKey: .logos)
+        self.logoPath = (try? container.decodeIfPresent(String.self, forKey: .logoPath))
+            ?? (try? container.decodeIfPresent(String.self, forKey: .logoPathCamel))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encodeIfPresent(logo, forKey: .logo)
+        try container.encodeIfPresent(logos, forKey: .logos)
+        try container.encodeIfPresent(logoPath, forKey: .logoPath)
+    }
+
+    /// Best available logo reference (absolute URL or relative path).
+    var bestLogoReference: String? {
+        let candidates: [String?] = [logo, logos?["original"], logos?["w500"], logos?.values.first, logoPath]
+        for candidate in candidates {
+            if let value = candidate?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty { return value }
+        }
+        return nil
     }
 }
 
@@ -1063,12 +1144,49 @@ struct NetworkDto: Codable, Identifiable, Hashable {
     let name: String
     let logo: String?
     let logos: [String: String]?
-    
-    init(id: Int, name: String, logo: String? = nil, logos: [String: String]? = nil) {
+    /// Optional raw logo path (`/abc.png`) if the backend forwards it.
+    let logoPath: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, logo, logos
+        case logoPath = "logo_path"
+        case logoPathCamel = "logoPath"
+    }
+
+    init(id: Int, name: String, logo: String? = nil, logos: [String: String]? = nil, logoPath: String? = nil) {
         self.id = id
         self.name = name
         self.logo = logo
         self.logos = logos
+        self.logoPath = logoPath
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(Int.self, forKey: .id)
+        self.name = try container.decode(String.self, forKey: .name)
+        self.logo = try container.decodeIfPresent(String.self, forKey: .logo)
+        self.logos = try container.decodeIfPresent([String: String].self, forKey: .logos)
+        self.logoPath = (try? container.decodeIfPresent(String.self, forKey: .logoPath))
+            ?? (try? container.decodeIfPresent(String.self, forKey: .logoPathCamel))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encodeIfPresent(logo, forKey: .logo)
+        try container.encodeIfPresent(logos, forKey: .logos)
+        try container.encodeIfPresent(logoPath, forKey: .logoPath)
+    }
+
+    /// Best available logo reference (absolute URL or relative path).
+    var bestLogoReference: String? {
+        let candidates: [String?] = [logo, logos?["original"], logos?["w500"], logos?.values.first, logoPath]
+        for candidate in candidates {
+            if let value = candidate?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty { return value }
+        }
+        return nil
     }
 }
 

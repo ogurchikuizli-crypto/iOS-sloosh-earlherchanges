@@ -278,6 +278,7 @@ private struct DownloadRowView: View {
     let item: DownloadItem
     var onShare: (DownloadItem) -> Void = { _ in }
     var onSaveToPhotos: (DownloadItem) -> Void = { _ in }
+    @ObservedObject private var downloadManager = DownloadManager.shared
     
     var body: some View {
         HStack(spacing: 16) {
@@ -304,8 +305,13 @@ private struct DownloadRowView: View {
                 if item.status == .downloading {
                     DownloadProgressBar(progress: item.progress)
                         .padding(.top, 4)
-                    HStack {
+                    HStack(spacing: 6) {
                         Text("Скачивание...")
+                        if let speed = downloadManager.speedString(for: item.id) {
+                            Text("• \(speed)")
+                                .foregroundStyle(Color.slooshAccent)
+                                .font(.system(size: 12, weight: .bold))
+                        }
                         Spacer()
                         Text("\(Int(item.progress * 100))%")
                     }

@@ -20,6 +20,7 @@ public struct ChatDetailView: View {
 
     @State private var replyingMessage: ChatMessage? = nil
     @State private var editingMessage: ChatMessage? = nil
+    @State private var showEmojiPicker: Bool = false
 
     @State private var isPeerTyping: Bool = false
     @State private var livePresence: (isOnline: Bool, lastSeenMs: Int64?)
@@ -42,7 +43,19 @@ public struct ChatDetailView: View {
 
             messageList
                 .safeAreaInset(edge: .bottom) {
-                    inputBar
+                    VStack(spacing: 0) {
+                        if showEmojiPicker {
+                            ChatEmojiPickerView { emoji in
+                                messageText += emoji
+                            } onDeleteLast: {
+                                if !messageText.isEmpty {
+                                    messageText.removeLast()
+                                }
+                            }
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+                        inputBar
+                    }
                 }
         }
         .toolbar(.hidden, for: .navigationBar)
@@ -95,6 +108,13 @@ public struct ChatDetailView: View {
 
             let (online, lastSeen) = await UserPresenceService.shared.fetchUserPresence(userId: peerUser.id)
             self.livePresence = (online, lastSeen)
+        }
+        .onChange(of: isInputFocused) { _, isFocused in
+            if isFocused && showEmojiPicker {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showEmojiPicker = false
+                }
+            }
         }
         .onChange(of: messageText) { _, newVal in
             let chatId = repo.getOrCreateChatId(peerUserId: peerUser.id)
@@ -423,14 +443,36 @@ public struct ChatDetailView: View {
                     ))
                 }
 
-                // 3. Text Input Field
-                TextField("Сообщение", text: $messageText, axis: .vertical)
-                    .font(.system(size: 16))
-                    .foregroundColor(.primary)
-                    .tint(colorScheme == .dark ? Color.white : Color.black)
-                    .lineLimit(1...6)
-                    .focused($isInputFocused)
-                    .frame(minHeight: isExpandedInput ? 24 : 38)
+                // 3. Text Input Field & Emoji Trigger
+                HStack(alignment: .bottom, spacing: 6) {
+                    Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        if showEmojiPicker {
+                            showEmojiPicker = false
+                            isInputFocused = true
+                        } else {
+                            isInputFocused = false
+                            withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+                                showEmojiPicker = true
+                            }
+                        }
+                    } label: {
+                        Image(systemName: showEmojiPicker ? "keyboard" : "face.smiling")
+                            .font(.system(size: 21, weight: .regular))
+                            .foregroundColor(showEmojiPicker ? Color.slooshAccent : (colorScheme == .dark ? Color.white.opacity(0.65) : Color.black.opacity(0.55)))
+                            .frame(width: 32, height: 38)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+
+                    TextField("Сообщение", text: $messageText, axis: .vertical)
+                        .font(.system(size: 16))
+                        .foregroundColor(.primary)
+                        .tint(colorScheme == .dark ? Color.white : Color.black)
+                        .lineLimit(1...6)
+                        .focused($isInputFocused)
+                        .frame(minHeight: isExpandedInput ? 24 : 38)
+                }
             }
             .padding(.top, isExpandedInput ? 6 : 2)
             .padding(.bottom, isExpandedInput ? 8 : 2)
@@ -1093,5 +1135,112 @@ private struct OpaquePressButtonStyle: ButtonStyle {
             .scaleEffect(configuration.isPressed ? 0.92 : 1.0)
             .opacity(1.0)
             .animation(.spring(response: 0.22, dampingFraction: 0.68), value: configuration.isPressed)
+    }
+}
+
+
+// MARK: - Chat Emoji Picker View
+
+private struct ChatEmojiPickerView: View {
+    let onSelect: (String) -> Void
+    var onDeleteLast: (() -> Void)? = nil
+
+    @State private var selectedCategory: Int = 0
+    @Environment(\.colorScheme) private var colorScheme
+
+    private let categories: [(name: String, icon: String, emojis: [String])] = [
+        ("Смайлы", "face.smiling", [
+            "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "🥲", "🥹", "😊", "😇", "🙂", "😉", "😌", "😍", "🥰", "😘", "😗",
+            "😋", "😛", "😜", "🤪", "🤨", "🧐", "🤓", "😎", "🤩", "🥳", "😏", "😒", "😞", "😔", "😟", "😕", "🥺", "😢",
+            "😭", "😤", "😠", "😡", "🤬", "🤯", "😳", "🥵", "🥶", "😱", "😨", "😰", "😥", "😓", "🤗", "🤔", "🫣", "🤭",
+            "🫢", "🫡", "🤫", "🫠", "😶", "😐", "😑", "😬", "🙄", "😯", "😴", "😵", "🤐", "🥴"
+        ]),
+        ("Кино", "popcorn.fill", [
+            "🍿", "🎬", "🎥", "🎞️", "📽️", "📺", "🎭", "🎫", "🎟️", "⭐️", "🌟", "✨", "⚡️", "🔥", "💥", "🏆", "🥇", "🍾", "🥂", "🍻", "🕶️"
+        ]),
+        ("Жесты", "hand.thumbsup.fill", [
+            "👍", "👎", "👏", "🙌", "🫶", "👐", "🤲", "🤝", "✊", "👊", "🤛", "🤜", "🤞", "✌️", "🫰", "🤟", "🤘", "👌", "🤌", "🤏", "👈", "👉", "👆", "👇", "☝️", "✋", "🤚", "🖐️", "🖖", "👋", "🤙", "💪"
+        ]),
+        ("Сердца", "heart.fill", [
+            "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔", "❤️‍🔥", "❤️‍🩹", "❣️", "💕", "💞", "💓", "💗", "💖", "💘", "💝"
+        ])
+    ]
+
+    private let columns = [
+        GridItem(.adaptive(minimum: 40), spacing: 8)
+    ]
+
+    var body: some View {
+        VStack(spacing: 8) {
+            // Category selector tabs
+            HStack(spacing: 6) {
+                ForEach(0..<categories.count, id: \.self) { idx in
+                    Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        selectedCategory = idx
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: categories[idx].icon)
+                                .font(.system(size: 13, weight: .semibold))
+                            Text(categories[idx].name)
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(selectedCategory == idx ? (colorScheme == .dark ? Color.white.opacity(0.18) : Color.black.opacity(0.1)) : Color.clear)
+                        .foregroundColor(selectedCategory == idx ? Color.slooshAccent : .secondary)
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Spacer()
+
+                if let onDelete = onDeleteLast {
+                    Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        onDelete()
+                    } label: {
+                        Image(systemName: "delete.left.fill")
+                            .font(.system(size: 17, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Удалить символ")
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 8)
+
+            // Emoji grid
+            ScrollView(.vertical, showsIndicators: false) {
+                LazyVGrid(columns: columns, spacing: 8) {
+                    ForEach(categories[selectedCategory].emojis, id: \.self) { emoji in
+                        Button {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            onSelect(emoji)
+                        } label: {
+                            Text(emoji)
+                                .font(.system(size: 28))
+                                .frame(width: 42, height: 42)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 12)
+            }
+            .frame(height: 190)
+        }
+        .background(
+            Color(UIColor.secondarySystemGroupedBackground)
+                .opacity(0.95)
+                .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        )
+        .padding(.horizontal, 10)
+        .padding(.bottom, 4)
     }
 }

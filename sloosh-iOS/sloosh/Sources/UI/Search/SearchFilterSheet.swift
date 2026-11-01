@@ -211,6 +211,17 @@ struct SearchFilterSheet: View {
                             if filters.order == nil { Image(systemName: "checkmark") }
                         }
                     }
+                    Button {
+                        let generator = UIImpactFeedbackGenerator(style: .light)
+                        generator.prepare()
+                        generator.impactOccurred()
+                        filters.order = "MONTH_POPULAR"
+                    } label: {
+                        HStack {
+                            Text("Топ за месяц")
+                            if filters.order == "MONTH_POPULAR" { Image(systemName: "checkmark") }
+                        }
+                    }
                 }
                 Button {
                     let generator = UIImpactFeedbackGenerator(style: .light)
@@ -593,6 +604,8 @@ struct SearchFilterSheet: View {
 
     private var currentSortTitle: String {
         switch filters.order {
+        case "MONTH_POPULAR":
+            return "Топ за месяц"
         case "NUM_VOTE":
             return "По популярности"
         case "RATING":

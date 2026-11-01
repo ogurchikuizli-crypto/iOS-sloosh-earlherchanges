@@ -658,6 +658,7 @@ struct DetailsView: View {
     @State private var movieToDelete: DownloadItem? = nil
     @State private var showDeleteMovieAlert = false
     @State private var showShareToFriendSheet = false
+    @State private var showSuggestLogoSheet = false
     @State private var directPlaybackMovie: MediaDto? = nil
     @State private var pendingDirectPlayerConfig: PlayerConfig? = nil
     @State private var directPlaybackTitle: String? = nil
@@ -667,7 +668,7 @@ struct DetailsView: View {
     @AppStorage("autoAdvanceBackdrops") private var autoAdvanceBackdrops = false
 
     private var isAnyModalPresented: Bool {
-        showSourceSheet || showPlayer || showShareToFriendSheet || showArtworkPickerSheet || selectedTrailer != nil || directPlaybackMovie != nil
+        showSourceSheet || showPlayer || showShareToFriendSheet || showSuggestLogoSheet || showArtworkPickerSheet || selectedTrailer != nil || directPlaybackMovie != nil
     }
 
     private var isBackdropPaused: Bool {
@@ -754,6 +755,13 @@ struct DetailsView: View {
             showArtworkPickerSheet = true
         } label: {
             Label("Настроить оформление", systemImage: "paintbrush.fill")
+        }
+
+        Button {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            showSuggestLogoSheet = true
+        } label: {
+            Label("Предложить другой логотип", systemImage: "photo.badge.plus")
         }
 
         Divider()
@@ -935,13 +943,25 @@ struct DetailsView: View {
                                 favoriteButton(inNavigationBar: true)
                             }
 
-                            TelegramGlassIconButton(systemName: "square.and.arrow.up", iconSize: 20) {
-                                guard viewModel.details != nil else { return }
-                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                                showShareToFriendSheet = true
+                            Menu {
+                                Button {
+                                    guard viewModel.details != nil else { return }
+                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                    showShareToFriendSheet = true
+                                } label: {
+                                    Label("Поделиться фильмом", systemImage: "square.and.arrow.up")
+                                }
+
+                                Button {
+                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                    showSuggestLogoSheet = true
+                                } label: {
+                                    Label("Предложить другой логотип", systemImage: "photo.badge.plus")
+                                }
+                            } label: {
+                                TelegramGlassIconButton(systemName: "ellipsis", iconSize: 20) {}
                             }
-                            .accessibilityLabel("Поделиться фильмом")
-                            .accessibilityIdentifier("details.share")
+                            .accessibilityLabel("Меню действий")
                         }
                     }
 
@@ -1186,6 +1206,11 @@ struct DetailsView: View {
             }
         } message: {
             Text("Вы действительно хотите удалить этот фильм из памяти устройства?")
+        }
+        .sheet(isPresented: $showSuggestLogoSheet) {
+            if let details = viewModel.details {
+                SuggestLogoSheet(details: details)
+            }
         }
         .sheet(isPresented: $showShareToFriendSheet) {
             if let details = viewModel.details {
@@ -1637,14 +1662,44 @@ struct DetailsView: View {
                         }
 
                         if let similar = details.similar, !similar.isEmpty {
-                            SimilarMediaSection(
-                                title: details.type == "tv" ? "Похожие сериалы" : "Похожие фильмы",
-                                items: similar,
-                                onDirectPlay: { movie in
+                            let (spinoffs, remaining) = partitionSimilarMedia(details: details, similar: similar)
+                            if !spinoffs.isEmpty {
+                                FranchiseSpinoffsSection(items: spinoffs, onDirectPlay: { movie in
                                     directPlaybackMovie = movie
+                                })
+                                .padding(.top, 16)
+                            }
+
+                            if !remaining.isEmpty {
+                                let similarTv = remaining.filter { $0.type?.lowercased() == "tv" || $0.type?.lowercased() == "serial" }
+                                let similarMovies = remaining.filter { $0.type?.lowercased() != "tv" && $0.type?.lowercased() != "serial" }
+
+                                if details.type == "movie" {
+                                    if !similarTv.isEmpty {
+                                        SimilarMediaSection(
+                                            title: "Похожие сериалы",
+                                            items: similarTv,
+                                            onDirectPlay: { movie in directPlaybackMovie = movie }
+                                        )
+                                        .padding(.top, 16)
+                                    }
+                                    if !similarMovies.isEmpty {
+                                        SimilarMediaSection(
+                                            title: "Похожие фильмы",
+                                            items: similarMovies,
+                                            onDirectPlay: { movie in directPlaybackMovie = movie }
+                                        )
+                                        .padding(.top, 16)
+                                    }
+                                } else {
+                                    SimilarMediaSection(
+                                        title: details.type == "tv" ? "Похожие сериалы" : "Похожие фильмы",
+                                        items: remaining,
+                                        onDirectPlay: { movie in directPlaybackMovie = movie }
+                                    )
+                                    .padding(.top, 16)
                                 }
-                            )
-                            .padding(.top, 16)
+                            }
                         }
 
                         if let relatedStudio = viewModel.relatedStudio, let items = relatedStudio.items, !items.isEmpty {
@@ -1829,14 +1884,44 @@ struct DetailsView: View {
                             }
 
                             if let similar = details.similar, !similar.isEmpty {
-                                SimilarMediaSection(
-                                    title: details.type == "tv" ? "Похожие сериалы" : "Похожие фильмы",
-                                    items: similar,
-                                    onDirectPlay: { movie in
+                                let (spinoffs, remaining) = partitionSimilarMedia(details: details, similar: similar)
+                                if !spinoffs.isEmpty {
+                                    FranchiseSpinoffsSection(items: spinoffs, onDirectPlay: { movie in
                                         directPlaybackMovie = movie
+                                    })
+                                    .padding(.top, 16)
+                                }
+
+                                if !remaining.isEmpty {
+                                    let similarTv = remaining.filter { $0.type?.lowercased() == "tv" || $0.type?.lowercased() == "serial" }
+                                    let similarMovies = remaining.filter { $0.type?.lowercased() != "tv" && $0.type?.lowercased() != "serial" }
+
+                                    if details.type == "movie" {
+                                        if !similarTv.isEmpty {
+                                            SimilarMediaSection(
+                                                title: "Похожие сериалы",
+                                                items: similarTv,
+                                                onDirectPlay: { movie in directPlaybackMovie = movie }
+                                            )
+                                            .padding(.top, 16)
+                                        }
+                                        if !similarMovies.isEmpty {
+                                            SimilarMediaSection(
+                                                title: "Похожие фильмы",
+                                                items: similarMovies,
+                                                onDirectPlay: { movie in directPlaybackMovie = movie }
+                                            )
+                                            .padding(.top, 16)
+                                        }
+                                    } else {
+                                        SimilarMediaSection(
+                                            title: details.type == "tv" ? "Похожие сериалы" : "Похожие фильмы",
+                                            items: remaining,
+                                            onDirectPlay: { movie in directPlaybackMovie = movie }
+                                        )
+                                        .padding(.top, 16)
                                     }
-                                )
-                                .padding(.top, 16)
+                                }
                             }
 
                             if let relatedStudio = viewModel.relatedStudio, let items = relatedStudio.items, !items.isEmpty {
@@ -2195,12 +2280,7 @@ private struct DetailsInfoSection: View {
                             ForEach(companies) { company in
                                 let brand = StudioBrand.find(by: company.name)
                                 NavigationLink(destination: StudioCatalogView(studioId: brand?.id ?? String(company.id), studioName: company.name)) {
-                                    Text(company.name)
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(.primary)
-                                        .padding(.horizontal, 14)
-                                        .padding(.vertical, 8)
-                                        .glassEffect(.regular.interactive(), in: Capsule())
+                                    StudioLogoChip(name: company.name, logoReference: company.bestLogoReference)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -2209,12 +2289,7 @@ private struct DetailsInfoSection: View {
                             ForEach(networks) { net in
                                 let brand = StudioBrand.find(by: net.name)
                                 NavigationLink(destination: StudioCatalogView(studioId: brand?.id ?? String(net.id), studioName: net.name)) {
-                                    Text(net.name)
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(.primary)
-                                        .padding(.horizontal, 14)
-                                        .padding(.vertical, 8)
-                                        .glassEffect(.regular.interactive(), in: Capsule())
+                                    StudioLogoChip(name: net.name, logoReference: net.bestLogoReference)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -2425,6 +2500,7 @@ struct EpisodeDetailsSheet: View {
     var viewModel: DetailsViewModel? = nil
     let onPlay: () -> Void
     let onWatchedToggle: (Bool) -> Void
+    var onDownloadWithQuality: ((Int, Int) -> Void)? = nil
     
     @State private var isWatched: Bool = false
     @State private var scrollOffset: CGFloat = 0
@@ -2681,12 +2757,14 @@ struct EpisodeDetailsSheet: View {
             case .paused:
                 DownloadManager.shared.resumeDownload(id: item.id)
             case .failed:
-                startDownload(kpId: kpId, details: details)
+                dismiss()
+                onDownloadWithQuality?(self.item.season, self.item.episode)
             case .completed:
                 DownloadManager.shared.deleteDownload(id: item.id)
             }
         } else {
-            startDownload(kpId: kpId, details: details)
+            dismiss()
+            onDownloadWithQuality?(self.item.season, self.item.episode)
         }
     }
     
@@ -3293,6 +3371,9 @@ struct InlineEpisodesSection: View {
                     }
                     updateWatchedSeasons()
                     redrawTrigger.toggle()
+                },
+                onDownloadWithQuality: { s, e in
+                    startDownloadWithPreferredTranslation(details: details, season: s, episode: e)
                 }
             )
             .environmentObject(viewModel)
@@ -4283,6 +4364,91 @@ private struct RelatedStudioSection: View {
     }
 }
 
+// MARK: - Franchise Spinoffs Section & Partition
+
+private func partitionSimilarMedia(details: MediaDetailsDto, similar: [MediaDto]) -> (spinoffs: [MediaDto], remaining: [MediaDto]) {
+    let mainTitle = (details.title ?? "").lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+    let origTitle = (details.originalTitle ?? "").lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+    let collectionName = (details.collection?.name ?? "").lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+
+    let stopWords: Set<String> = ["the", "a", "an", "and", "or", "in", "on", "of", "to", "for", "и", "в", "на", "с", "по", "для", "сезон", "часть", "фильм", "сериал"]
+    func tokens(from s: String) -> [String] {
+        s.components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+            .filter { $0.count >= 3 && !stopWords.contains($0) }
+    }
+
+    let baseTokens = Set(tokens(from: mainTitle) + tokens(from: origTitle) + tokens(from: collectionName))
+    let markers: [String] = ["спинофф", "спин-офф", "приквел", "истоки", "начало", "хроники", "истории", "origins", "prequel", "spinoff", "tales"]
+
+    let partIds: Set<String> = Set(details.collection?.parts?.compactMap { $0.id } ?? [])
+
+    var spinoffs: [MediaDto] = []
+    var remaining: [MediaDto] = []
+
+    for item in similar {
+        if partIds.contains(item.id) {
+            continue
+        }
+        let itemTitle = (item.title ?? "").lowercased()
+        let itemTokens = Set(tokens(from: itemTitle))
+        let sharesToken = !baseTokens.isDisjoint(with: itemTokens)
+        let hasMarker = markers.contains { itemTitle.contains($0) }
+
+        if (sharesToken && !baseTokens.isEmpty) || hasMarker {
+            spinoffs.append(item)
+        } else {
+            remaining.append(item)
+        }
+    }
+    return (spinoffs, remaining)
+}
+
+private struct FranchiseSpinoffsSection: View {
+    let items: [MediaDto]
+    var onDirectPlay: ((MediaDto) -> Void)? = nil
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles.tv")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.green)
+                Text("Спиноффы и приквелы")
+                    .font(.system(size: 18, weight: .bold))
+                    .backdropForeground()
+            }
+            .padding(.horizontal)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(alignment: .top, spacing: 14) {
+                    ForEach(items) { item in
+                        NavigationLink(destination: DetailsView(movieId: item.id, mediaType: item.type, navigationTransitionID: nil, navigationTransitionNamespace: nil).navigationBarBackButtonHidden(true)) {
+                            MoviePosterCard(movie: item)
+                                .frame(width: 120)
+                        }
+                        .buttonStyle(.cardPress)
+                        .contextMenu {
+                            Group {
+                                Button {
+                                    onDirectPlay?(item)
+                                } label: {
+                                    Label("Смотреть", systemImage: "play.fill")
+                                }
+                                NavigationLink(destination: DetailsView(movieId: item.id, mediaType: item.type, navigationTransitionID: nil, navigationTransitionNamespace: nil).navigationBarBackButtonHidden(true)) {
+                                    Label("Подробнее", systemImage: "info.circle")
+                                }
+                            }
+                            .tint(nil)
+                        }
+                    }
+                }
+                .padding(.horizontal)
+            }
+        }
+    }
+}
+
 // MARK: - Similar Media Section
 
 private struct SimilarMediaSection: View {
@@ -4342,5 +4508,63 @@ extension AnyTransition {
             active: BlurFadeScaleModifier(isBlurry: true),
             identity: BlurFadeScaleModifier(isBlurry: false)
         )
+    }
+}
+
+// MARK: - Studio Logo Chip
+
+/// Shows a studio / network as its logo inside a glass capsule, falling back to the plain name.
+private struct StudioLogoChip: View {
+    let name: String
+    let logoReference: String?
+
+    private var logoURL: URL? {
+        guard let raw = logoReference?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
+        if raw.hasPrefix("http") {
+            if let adjusted = normalizeImageUrl(path: raw) {
+                return URL(string: adjusted)
+            }
+            return URL(string: raw)
+        }
+        let path = raw.hasPrefix("/") ? raw : "/" + raw
+        return URL(string: "\(MoviesApi.activeImagesBaseURL)/api/v1/images/tmdb/w500\(path)")
+    }
+
+    private var nameLabel: some View {
+        Text(name)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundColor(.primary)
+            .lineLimit(1)
+    }
+
+    var body: some View {
+        Group {
+            if let url = logoURL {
+                AsyncCachedImage(
+                    url: url,
+                    placeholder: {
+                        nameLabel
+                    },
+                    content: { image in
+                        Image(uiImage: image)
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .foregroundColor(.primary)
+                            .frame(maxWidth: 110, maxHeight: 22)
+                            .accessibilityLabel(Text(name))
+                    },
+                    fallback: {
+                        nameLabel
+                    }
+                )
+            } else {
+                nameLabel
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .frame(minHeight: 36)
+        .glassEffect(.regular.interactive(), in: Capsule())
     }
 }

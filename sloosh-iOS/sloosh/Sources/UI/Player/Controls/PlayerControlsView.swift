@@ -11,6 +11,7 @@ struct PlayerControlsView: View {
     var showControls: Bool
     var isSeeking: Bool
     var onInteraction: (() -> Void)? = nil
+    var onToggleChat: (() -> Void)? = nil
 
     @ObservedObject private var subtitleSettings = SubtitleSettings.shared
 
@@ -35,7 +36,7 @@ struct PlayerControlsView: View {
             ZStack {
                 // ── Верхний и нижний блоки ───────────────────────
                 VStack {
-                    TopBarView(vm: vm, onDismiss: onDismiss, isInteracting: $isInteracting, onInteraction: onInteraction)
+                    TopBarView(vm: vm, onDismiss: onDismiss, isInteracting: $isInteracting, onInteraction: onInteraction, onToggleChat: onToggleChat)
                         .padding(.top, 24) // Увеличенный отступ
                         .offset(y: showControls ? 0 : -8)
                         .opacity(isSeeking ? 0 : 1)

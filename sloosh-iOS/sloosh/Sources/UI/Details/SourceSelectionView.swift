@@ -450,7 +450,7 @@ struct SourceSelectionView: View {
         headers: [String: String],
         source: MediaStreamSource
     ) {
-        if preferredQuality == .ask {
+        if mode == .download || preferredQuality == .ask {
             pendingCommit = PendingPlaybackCommit(
                 translation: translation,
                 season: season,

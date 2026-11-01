@@ -10,6 +10,7 @@ struct PlayerContainerView: View {
     @ObservedObject private var watchPartyRepo = WatchPartyRepository.shared
 
     @State private var showControls = true
+    @State private var showWatchPartyChat = false
     @State private var showLockOverlay = false
     @State private var lockHideTask: Task<Void, Never>?
     @State private var pipController: AVPictureInPictureController?
@@ -100,6 +101,11 @@ struct PlayerContainerView: View {
                             isSeeking: isSeeking,
                             onInteraction: {
                                 resetHideTimer()
+                            },
+                            onToggleChat: {
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                    showWatchPartyChat.toggle()
+                                }
                             }
                         )
                         .allowsHitTesting(showControls)
@@ -120,6 +126,29 @@ struct PlayerContainerView: View {
                     .zIndex(20)
                     .allowsHitTesting(false)
                     .transition(.move(edge: .top).combined(with: .opacity))
+                }
+
+                // 10. Чат совместного просмотра с кликабельными таймкодами
+                if showWatchPartyChat && watchPartyRepo.isConnected {
+                    WatchPartyChatOverlayView(
+                        currentTime: vm.currentTime,
+                        onSeek: { target in
+                            vm.seek(to: target)
+                        },
+                        onClose: {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                showWatchPartyChat = false
+                            }
+                        }
+                    )
+                    .padding(.trailing, 16)
+                    .padding(.top, 60)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .trailing).combined(with: .opacity),
+                        removal: .move(edge: .trailing).combined(with: .opacity)
+                    ))
+                    .zIndex(25)
                 }
             }
         }

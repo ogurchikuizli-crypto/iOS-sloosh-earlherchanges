@@ -10,6 +10,44 @@ struct SettingsView: View {
     @AppStorage("tabBarMinimizeOnScroll") private var tabBarMinimizeOnScroll = true
     @AppStorage("cardStyle") private var cardStyle: CardStyle = .classic
     @AppStorage("cardDensity") private var cardDensity: CardDensity = .regular
+    @ObservedObject private var favoritesRepo = FavoritesRepository.shared
+
+    private var previewItems: [CatalogPreviewItem] {
+        let favs = favoritesRepo.favorites.filter { fav in
+            let p = fav.posterUrl?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return !p.isEmpty
+        }
+        if !favs.isEmpty {
+            return Array(favs.prefix(3)).map { fav in
+                CatalogPreviewItem(
+                    id: fav.id,
+                    title: fav.title,
+                    subtitle: fav.year ?? "Фильм",
+                    posterUrl: fav.posterUrl
+                )
+            }
+        }
+        return [
+            CatalogPreviewItem(
+                id: "1",
+                title: "Интерстеллар",
+                subtitle: "2014, Фантастика",
+                posterUrl: "https://image.tmdb.org/t/p/w500/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg"
+            ),
+            CatalogPreviewItem(
+                id: "2",
+                title: "Дюна 2",
+                subtitle: "2024, Фантастика",
+                posterUrl: "https://image.tmdb.org/t/p/w500/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg"
+            ),
+            CatalogPreviewItem(
+                id: "3",
+                title: "Оппенгеймер",
+                subtitle: "2023, Драма",
+                posterUrl: "https://image.tmdb.org/t/p/w500/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg"
+            )
+        ]
+    }
     @AppStorage("posterQuality") private var posterQuality: PosterQuality = .high
     @AppStorage("appTheme") private var appTheme: AppTheme = .system
     @AppStorage("showOriginalTitle") private var showOriginalTitle = true
@@ -40,8 +78,8 @@ struct SettingsView: View {
                     let cardHeight = cardStyle == .classic ? cardWidth * 1.5 + 34 : cardWidth * 1.5
                     
                     HStack(spacing: spacing) {
-                        ForEach(0..<3, id: \.self) { _ in
-                            PreviewMoviePosterCard(style: cardStyle, width: cardWidth)
+                        ForEach(previewItems) { item in
+                            PreviewMoviePosterCard(style: cardStyle, width: cardWidth, item: item)
                         }
                     }
                     .frame(height: cardHeight)
@@ -449,50 +487,93 @@ struct SettingsView: View {
     }
 }
 
+struct CatalogPreviewItem: Identifiable, Hashable {
+    let id: String
+    let title: String
+    let subtitle: String
+    let posterUrl: String?
+}
+
 struct PreviewMoviePosterCard: View {
     let style: CardStyle
     let width: CGFloat
-    
+    let item: CatalogPreviewItem
+
+    private var posterURL: URL? {
+        guard let raw = item.posterUrl?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
+        if let norm = normalizeImageUrl(path: raw) {
+            return URL(string: norm)
+        }
+        return URL(string: raw)
+    }
+
     var body: some View {
         let cardHeight = style == .classic ? width * 1.5 + 34 : width * 1.5
-        VStack(alignment: .leading, spacing: style == .classic ? 8 : 0) {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.secondary.opacity(0.15))
-                .frame(width: width, height: width * 1.5)
-                .overlay(
-                    // Текст оверлея всегда в иерархии, меняется только прозрачность
-                    VStack(alignment: .leading, spacing: 4) {
-                        Spacer()
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.secondary.opacity(0.25))
-                            .frame(height: 12)
-                            .frame(width: width * 0.7)
-                        
-                        RoundedRectangle(cornerRadius: 2)
+        VStack(alignment: .leading, spacing: style == .classic ? 6 : 0) {
+            ZStack(alignment: .bottomLeading) {
+                if let url = posterURL {
+                    AsyncCachedImage(url: url) {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.secondary.opacity(0.15))
+                            .shimmer()
+                    } content: { image in
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: width, height: width * 1.5)
+                            .clipped()
+                    } fallback: {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .fill(Color.secondary.opacity(0.2))
-                            .frame(height: 10)
-                            .frame(width: width * 0.45)
                     }
-                    .padding(8)
+                } else {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.secondary.opacity(0.2))
+                }
+
+                // Overlay gradient & text
+                VStack(alignment: .leading, spacing: 2) {
+                    Spacer()
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.title)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                        Text(item.subtitle)
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.7))
+                            .lineLimit(1)
+                    }
+                    .padding(6)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .opacity(style == .overlay ? 1.0 : 0.0)
-                )
-            
-            // Классический текст всегда в иерархии, плавно меняются высота и прозрачность
-            VStack(alignment: .leading, spacing: 4) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Color.secondary.opacity(0.15))
-                    .frame(height: 12)
-                    .frame(width: width * 0.75)
-                
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Color.secondary.opacity(0.1))
-                    .frame(height: 10)
-                    .frame(width: width * 0.5)
+                    .background(
+                        LinearGradient(
+                            colors: [.clear, .black.opacity(0.85)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                }
+                .opacity(style == .overlay ? 1.0 : 0.0)
             }
-            .padding(.horizontal, 4)
+            .frame(width: width, height: width * 1.5)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            // Classic style text below
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+                Text(item.subtitle)
+                    .font(.system(size: 9, weight: .regular))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 2)
+            .frame(width: width, alignment: .leading)
             .opacity(style == .classic ? 1.0 : 0.0)
-            .frame(height: style == .classic ? 26 : 0, alignment: .top)
+            .frame(height: style == .classic ? 28 : 0, alignment: .top)
             .clipped()
         }
         .frame(width: width, height: cardHeight, alignment: .top)
