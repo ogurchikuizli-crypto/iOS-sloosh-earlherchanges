@@ -1143,7 +1143,7 @@ class HomeViewModel: ObservableObject {
                 }
             case .tvShows:
                 switch filter {
-                case .popular:
+                case .popular, .monthPopular:
                     let raw = try await MoviesRepository.shared.getPopularTv(page: cursor.page, force: force)
                     return raw.filter { !isTalkShowOrReality($0) }
                 case .topRated:
@@ -1154,7 +1154,7 @@ class HomeViewModel: ObservableObject {
                 return try await MoviesRepository.shared.getCartoons(page: cursor.page, force: force)
             case .anime:
                 switch filter {
-                case .popular:
+                case .popular, .monthPopular:
                     return try await MoviesRepository.shared.getPopularAnime(page: cursor.page, force: force)
                 case .topRated:
                     return try await MoviesRepository.shared.getTopAnime(page: cursor.page, force: force)

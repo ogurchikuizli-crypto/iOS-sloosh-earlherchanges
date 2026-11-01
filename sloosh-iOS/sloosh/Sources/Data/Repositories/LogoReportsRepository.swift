@@ -60,10 +60,10 @@ public final class LogoReportsRepository: ObservableObject {
     private init() {}
 
     private var authQueryParam: String {
-        if let token = AuthRepository.shared.cachedToken, !token.isEmpty {
-            return "?auth=\(token)"
+        guard let token = AuthRepository.shared.currentUser?.idToken, !token.isEmpty else {
+            return ""
         }
-        return ""
+        return "?auth=\(token)"
     }
 
     public func submitReport(
@@ -138,7 +138,7 @@ public final class LogoReportsRepository: ObservableObject {
     }
 
     public func approveReport(_ report: LogoReportDto) async -> Bool {
-        await MediaOverridesRepository.shared.saveOverride(
+        try? await MediaOverridesRepository.shared.saveOverride(
             mediaId: report.mediaId,
             kpId: report.kpId,
             tmdbId: report.tmdbId,
