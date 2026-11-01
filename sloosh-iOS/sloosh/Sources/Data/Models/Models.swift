@@ -1067,7 +1067,7 @@ public enum DoomsdayPrerequisites {
         1003596  // Avengers: Doomsday
     ]
 
-    public static func matches(_ media: MediaDto) -> Bool {
+    static func matches(_ media: MediaDto) -> Bool {
         if let tmdb = media.externalIds?.tmdb, tmdbIds.contains(tmdb) { return true }
         if let kp = media.externalIds?.kp, [263531, 679830, 843649, 843650].contains(kp) { return true }
         if let idInt = Int(media.id), tmdbIds.contains(idInt) { return true }

@@ -652,7 +652,7 @@ public final class PlaybackAnalyticsService: ObservableObject {
         return items
     }
     /// Fetches top media for the last month (30 days) from Sloosh statistics
-    public func fetchMonthlyTopMedia(limit: Int = 40) async -> [MediaDto] {
+    func fetchMonthlyTopMedia(limit: Int = 40) async -> [MediaDto] {
         let stats = await fetchTopMediaAnalytics()
         guard !stats.isEmpty else { return [] }
 
