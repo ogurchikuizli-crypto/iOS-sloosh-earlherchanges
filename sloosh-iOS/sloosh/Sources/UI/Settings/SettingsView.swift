@@ -20,8 +20,8 @@ struct SettingsView: View {
         if !favs.isEmpty {
             return Array(favs.prefix(3)).map { fav in
                 CatalogPreviewItem(
-                    id: fav.id,
-                    title: fav.title,
+                    id: fav.id ?? UUID().uuidString,
+                    title: fav.title ?? "Без названия",
                     subtitle: fav.year ?? "Фильм",
                     posterUrl: fav.posterUrl
                 )
