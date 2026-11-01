@@ -1643,9 +1643,16 @@ struct DetailsView: View {
                         }
 
                         if details.type == "tv" {
-                            InlineEpisodesSection(viewModel: viewModel, details: details) { season, episode in
-                                handleEpisodeSelection(details: details, season: season, episode: episode)
-                            }
+                            InlineEpisodesSection(
+                                viewModel: viewModel,
+                                details: details,
+                                onDownloadTap: { s, e in
+                                    startDownloadWithPreferredTranslation(details: details, season: s, episode: e)
+                                },
+                                onEpisodeTap: { season, episode in
+                                    handleEpisodeSelection(details: details, season: season, episode: episode)
+                                }
+                            )
                             .padding(.top, 16)
                         }
 
@@ -1864,10 +1871,14 @@ struct DetailsView: View {
                                 InlineEpisodesSection(
                                     viewModel: viewModel,
                                     details: details,
-                                    horizontalPadding: paddingVal
-                                ) { season, episode in
-                                    handleEpisodeSelection(details: details, season: season, episode: episode)
-                                }
+                                    horizontalPadding: paddingVal,
+                                    onDownloadTap: { s, e in
+                                        startDownloadWithPreferredTranslation(details: details, season: s, episode: e)
+                                    },
+                                    onEpisodeTap: { season, episode in
+                                        handleEpisodeSelection(details: details, season: season, episode: episode)
+                                    }
+                                )
                                 .padding(.top, 16)
                             }
 
@@ -3231,6 +3242,7 @@ struct InlineEpisodesSection: View {
     @ObservedObject var viewModel: DetailsViewModel
     let details: MediaDetailsDto
     var horizontalPadding: CGFloat = 16
+    var onDownloadTap: ((Int, Int) -> Void)? = nil
     let onEpisodeTap: (Int, Int) -> Void
 
     @State private var selectedSeason: Int = 1
@@ -3373,7 +3385,7 @@ struct InlineEpisodesSection: View {
                     redrawTrigger.toggle()
                 },
                 onDownloadWithQuality: { s, e in
-                    startDownloadWithPreferredTranslation(details: details, season: s, episode: e)
+                    onDownloadTap?(s, e)
                 }
             )
             .environmentObject(viewModel)
