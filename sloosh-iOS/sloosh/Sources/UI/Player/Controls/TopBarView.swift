@@ -234,6 +234,7 @@ struct TopBarView: View {
         .accessibilityLabel("Чат совместного просмотра")
     }
 
+    @ViewBuilder
     private var watchPartyButton: some View {
         if watchPartyRepo.isConnected, let peer = watchPartyRepo.peerUser {
             Menu {

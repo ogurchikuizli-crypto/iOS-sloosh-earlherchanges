@@ -94,11 +94,11 @@ public final class WatchPartyRepository: ObservableObject {
         return "?auth=\(token)"
     }
 
-    private var currentUserId: String {
+    public var currentUserId: String {
         AuthRepository.shared.currentUser?.id ?? "anonymous"
     }
 
-    private var currentUserName: String {
+    public var currentUserName: String {
         let name = AuthRepository.shared.currentUser?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let name, !name.isEmpty { return name }
         let email = AuthRepository.shared.currentUser?.email?.components(separatedBy: "@").first
